@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\backend\\\\scrapers''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\backend\\\\routers''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\frontend\\\\src\\\\components''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\frontend\\\\src\\\\api''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\frontend\\\\src\\\\hooks''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\frontend\\\\src\\\\types''; New-Item -ItemType Directory -Force -Path ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\data''; Write-Host ''Directories created''\")",
+      "Bash(python -m venv .venv)",
+      "Bash(powershell -Command \"cd ''C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\backend''; python -m venv .venv; Write-Host ''venv done''\")",
+      "Bash(powershell -NonInteractive -Command \":*)",
+      "Bash(cmd /c \"cd /d \"\"C:\\\\Users\\\\USER\\\\Desktop\\\\Claude Code\\\\apt_hunt\\\\backend\"\" && python -m venv .venv && .venv\\\\Scripts\\\\pip install -r requirements.txt --quiet && echo PIP_OK\")",
+      "Bash(where python:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(winget install:*)",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install -r \"C:/Users/USER/Desktop/Claude Code/apt_hunt/backend/requirements.txt\" -q)",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" -m playwright install chromium)",
+      "Bash(echo \"PLAYWRIGHT:$?\")",
+      "Bash(curl -s http://localhost:8000/)",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" -c \":*)",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" -c \"import httpx,json; r=httpx.get\\(''https://gw.yad2.co.il/feed-search-legacy/realestate/forsale'',params={''city'':''7400'',''minRooms'':''4'',''rows'':''3''},headers={''Referer'':''https://www.yad2.co.il/'',''User-Agent'':''Mozilla/5.0''},follow_redirects=True,timeout=15\\); open\\(''C:/Users/USER/Desktop/tmp_yad2.json'',''w''\\).write\\(json.dumps\\({''status'':r.status_code,''keys'':list\\(r.json\\(\\).keys\\(\\)\\),''data_keys'':list\\(r.json\\(\\).get\\(''data'',{}\\).keys\\(\\)\\)}\\)\\)\")",
+      "WebFetch(domain:gw.yad2.co.il)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.yad2.co.il)",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" \"C:/Users/USER/Desktop/Claude Code/apt_hunt/backend/test_yad2.py\")",
+      "Bash(\"C:/Users/USER/AppData/Local/Programs/Python/Python312/python.exe\" \"C:/Users/USER/Desktop/Claude Code/apt_hunt/backend/scrapers/yad2.py\")"
+    ]
+  }
+}
