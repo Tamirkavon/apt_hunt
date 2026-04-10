@@ -48,7 +48,11 @@
       "Bash(curl --max-time 10 -w \"\\\\nHTTP_STATUS:%{http_code}\" -X POST http://localhost:8000/api/scrape)",
       "Bash(git -C \"C:/Users/USER/Desktop/Claude Code/apt_hunt\" status)",
       "Bash(git -C \"/c/Users/USER/Desktop/Claude Code/apt_hunt\" diff --name-only HEAD)",
-      "Bash(git version:*)"
+      "Bash(git version:*)",
+      "Bash(git -C \"/c/Users/USER/Desktop/Claude Code/apt_hunt\" status)",
+      "Bash(git -C \"/c/Users/USER/Desktop/Claude Code/apt_hunt\" diff --stat)",
+      "Bash(git -C \"/c/Users/USER/Desktop/Claude Code/apt_hunt\" log --oneline -3)",
+      "Bash(printf '%s\\\\n' \"test output\")"
     ]
   }
 }

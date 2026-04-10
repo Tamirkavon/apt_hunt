@@ -14,7 +14,7 @@ echo.
 start "apt_hunt Backend" cmd /k "cd /d "%~dp0backend" && call .venv\Scripts\activate && uvicorn main:app --host 0.0.0.0 --port 8000"
 
 echo Waiting for backend to start...
-timeout /t 3 /nobreak >nul
+timeout /t 5 /nobreak >nul
 
 echo.
 echo === Starting ngrok tunnel ===
@@ -22,8 +22,16 @@ echo === Public URL: https://unpesterous-mikel-individualistically.ngrok-free.de
 echo.
 start "ngrok" cmd /k "ngrok http 8000 --url=unpesterous-mikel-individualistically.ngrok-free.dev"
 
+echo Waiting for ngrok...
+timeout /t 3 /nobreak >nul
+
 echo.
-echo Both services started!
+echo === Running scraper ===
+echo.
+start "apt_hunt Scraper" cmd /k "cd /d "%~dp0backend" && call .venv\Scripts\activate && python -m scrapers.runner && echo Scrape done! && pause"
+
+echo.
+echo All services started!
 echo Backend: http://localhost:8000
 echo Public:  https://unpesterous-mikel-individualistically.ngrok-free.dev
 echo Frontend: https://apt-hunt-hod-hasharon.netlify.app
