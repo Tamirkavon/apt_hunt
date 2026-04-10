@@ -40,11 +40,14 @@ export function ListingCard({ listing: l }: Props) {
   const [descExpanded, setDescExpanded] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(l.notes ?? "");
+  const [noteSaved, setNoteSaved] = useState(false);
   const isNew = isNewToday(l.first_seen_at);
   const isSeen = l.is_seen === 1;
 
   const saveNote = () => {
-    update.mutate({ id: l.id, notes: noteText });
+    update.mutate({ id: l.id, notes: noteText }, {
+      onSuccess: () => { setNoteSaved(true); setTimeout(() => setNoteSaved(false), 2000); },
+    });
     setEditingNote(false);
   };
 
@@ -62,7 +65,7 @@ export function ListingCard({ listing: l }: Props) {
         relative bg-white rounded-xl overflow-hidden transition-all duration-200
         border hover:shadow-lg hover:-translate-y-0.5
         ${isNew ? "border-amber-300 shadow-sm shadow-amber-100" : "border-stone-200 shadow-sm"}
-        ${isSeen ? "opacity-55" : ""}
+        ${isSeen ? "opacity-40" : ""}
       `}
     >
       {/* Image */}
@@ -200,7 +203,9 @@ export function ListingCard({ listing: l }: Props) {
               className="flex items-start gap-1.5 text-xs text-stone-400 hover:text-stone-600 transition-colors w-full text-right"
             >
               <Pencil size={10} className="mt-0.5 shrink-0" />
-              <span className="italic font-light">{l.notes || "הוסף הערה..."}</span>
+              <span className={`italic font-light transition-colors ${noteSaved ? "text-emerald-600" : ""}`}>
+                {noteSaved ? "נשמר ✓" : (l.notes || "הוסף הערה...")}
+              </span>
             </button>
           )}
         </div>

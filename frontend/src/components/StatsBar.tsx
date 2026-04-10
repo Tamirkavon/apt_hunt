@@ -7,18 +7,13 @@ interface Props {
   stats: Stats | undefined;
 }
 
-function fmtPrice(n: number) {
-  if (!n) return "—";
-  return "₪" + (n / 1_000_000).toFixed(2) + "M";
-}
-
 function fmtDate(iso: string | null) {
-  if (!iso) return "—";
+  if (!iso) return null;
   try {
     const d = new Date(iso);
     return d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   } catch {
-    return iso;
+    return null;
   }
 }
 
@@ -40,44 +35,43 @@ function HomeAddressBar() {
     setError(null);
     updateHome.mutate(draft.trim(), {
       onSuccess: () => setEditing(false),
-      onError: () => setError("לא נמצאה כתובת — נסה שנית"),
+      onError: () => setError("לא נמצאה כתובת"),
     });
   };
 
   const cancel = () => { setEditing(false); setError(null); };
 
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        <MapPin size={11} className="shrink-0 text-amber-500" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+          className="border border-stone-300 rounded-md px-2 py-0.5 text-stone-800 text-sm w-56 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
+          autoFocus
+          placeholder="הזן כתובת..."
+        />
+        <button onClick={save} disabled={updateHome.isPending} className="text-stone-400 hover:text-stone-700 transition-colors">
+          {updateHome.isPending ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+        </button>
+        <button onClick={cancel} className="text-stone-400 hover:text-stone-600"><X size={12} /></button>
+        {error && (
+          <span className="flex items-center gap-1 text-red-500 text-xs">
+            <AlertCircle size={10} /> {error}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <MapPin size={12} className="shrink-0 text-amber-500" />
-      {editing ? (
-        <>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
-            className="bg-white border border-stone-300 rounded-md px-2 py-1 text-stone-800 text-sm w-60 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
-            autoFocus
-            placeholder="הזן כתובת..."
-          />
-          <button onClick={save} disabled={updateHome.isPending} className="text-stone-500 hover:text-stone-800 transition-colors">
-            {updateHome.isPending ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
-          </button>
-          <button onClick={cancel} className="text-stone-400 hover:text-stone-600 transition-colors"><X size={13} /></button>
-          {error && (
-            <span className="flex items-center gap-1 text-red-500 text-xs">
-              <AlertCircle size={11} /> {error}
-            </span>
-          )}
-        </>
-      ) : (
-        <>
-          <span className="text-stone-600 text-sm">{home?.address ?? "..."}</span>
-          <button onClick={startEdit} className="text-stone-400 hover:text-amber-500 transition-colors" title="שנה כתובת בית">
-            <Pencil size={11} />
-          </button>
-        </>
-      )}
-    </div>
+    <button onClick={startEdit} className="flex items-center gap-1.5 text-stone-400 hover:text-stone-600 transition-colors group">
+      <MapPin size={11} className="text-amber-500 shrink-0" />
+      <span className="text-xs font-light">{home?.address ?? "..."}</span>
+      <Pencil size={9} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
   );
 }
 
@@ -85,65 +79,48 @@ export function StatsBar({ stats }: Props) {
   const scrape = useScrape();
   const { data: status } = useScrapeStatus();
   const isRunning = status?.running || scrape.isPending;
+  const lastUpdate = fmtDate(stats?.last_scrape_at ?? null);
+
+  // Build editorial headline
+  const today = new Date().toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" });
+  const newCount = stats?.new_today ?? 0;
+  const drops = stats?.price_drops_today ?? 0;
+
+  const headline = [
+    newCount > 0 ? `${newCount} דירות חדשות` : "אין דירות חדשות היום",
+    drops > 0 ? `${drops} ירידות מחיר` : null,
+    stats?.total_active ? `${stats.total_active} סה״כ` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div className="bg-white border-b border-stone-200 px-3 sm:px-6 py-3 shadow-sm">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-
-        {/* Title + count */}
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-stone-800">סוכן דירות</h1>
-          <span className="text-stone-400 text-sm font-light">
-            {stats?.total_active ?? "—"} דירות
-          </span>
+    <div className="bg-white border-b border-stone-200 px-4 sm:px-6 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-4">
+        {/* Left: title + headline */}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <h1 className="text-base font-semibold text-stone-900 shrink-0">סוכן דירות</h1>
+            <span className={`text-sm font-light ${newCount > 0 ? "text-amber-600" : "text-stone-400"}`}>
+              {headline}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <HomeAddressBar />
+            {lastUpdate && (
+              <span className="text-xs text-stone-300 font-light">עדכון {lastUpdate}</span>
+            )}
+          </div>
         </div>
 
-        {/* Stats pills */}
-        <div className="flex items-center gap-3 flex-wrap text-sm">
-          {(stats?.new_today ?? 0) > 0 && (
-            <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              {stats!.new_today} חדשות היום
-            </span>
-          )}
-
-          <span className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-medium">
-            ★ {stats?.favorites_count ?? 0} מועדפות
-          </span>
-
-          {(stats?.price_drops_today ?? 0) > 0 && (
-            <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
-              ↓ {stats!.price_drops_today} ירידות מחיר
-            </span>
-          )}
-
-          {stats?.avg_price ? (
-            <span className="text-stone-500 text-sm">
-              ממוצע: <strong className="text-stone-700">{fmtPrice(stats.avg_price)}</strong>
-            </span>
-          ) : null}
-        </div>
-
-        {/* Right: scrape button + last update */}
-        <div className="flex items-center gap-3">
-          <span className="text-stone-400 text-xs hidden sm:block">
-            עדכון {fmtDate(stats?.last_scrape_at ?? null)}
-          </span>
-          <button
-            onClick={() => scrape.mutate()}
-            disabled={isRunning}
-            className="flex items-center gap-1.5 text-sm font-medium text-white bg-stone-800 hover:bg-stone-700
-                       px-4 py-2 rounded-lg transition-all disabled:opacity-40 shadow-sm"
-          >
-            <RefreshCw size={13} className={isRunning ? "animate-spin" : ""} />
-            {isRunning ? "סורק..." : "עדכן"}
-          </button>
-        </div>
-      </div>
-
-      {/* Home address row */}
-      <div className="mt-3 pt-3 border-t border-stone-100">
-        <HomeAddressBar />
+        {/* Right: scrape button */}
+        <button
+          onClick={() => scrape.mutate()}
+          disabled={isRunning}
+          className="flex items-center gap-1.5 text-sm font-medium text-white bg-stone-800 hover:bg-stone-700
+                     px-4 py-2 rounded-lg transition-all disabled:opacity-40 shadow-sm shrink-0"
+        >
+          <RefreshCw size={13} className={isRunning ? "animate-spin" : ""} />
+          {isRunning ? "סורק..." : "עדכן"}
+        </button>
       </div>
     </div>
   );

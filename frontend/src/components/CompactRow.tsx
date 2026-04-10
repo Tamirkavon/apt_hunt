@@ -23,7 +23,7 @@ export function CompactRow({ listing: l }: { listing: Listing }) {
     <div className={`
       flex items-center gap-3 px-4 py-3 bg-white border-b border-stone-100
       hover:bg-stone-50 transition-colors group
-      ${isSeen ? "opacity-45" : ""}
+      ${isSeen ? "opacity-40" : ""}
     `}>
       {/* Thumbnail */}
       <div className="shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-stone-100">
