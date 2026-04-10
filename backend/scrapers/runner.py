@@ -170,13 +170,21 @@ def get_top_listings(conn, limit: int = 3) -> list[dict]:
     scored = []
     for row in rows:
         d = dict(row)
-        score = 0
+        # Price/sqm score (lower = better value), normalized to avg
         if d.get("price") and d.get("size_sqm") and d["size_sqm"] > 0 and avg:
-            ppsqm = d["price"] / d["size_sqm"]
-            score = ppsqm / avg  # lower = better value
+            price_score = (d["price"] / d["size_sqm"]) / avg
         else:
-            score = d.get("price", 9_999_999) / 3_500_000
-        d["_score"] = score
+            price_score = d.get("price", 9_999_999) / 3_500_000
+
+        # Distance score (lower = closer = better); max 5km range
+        dist = d.get("distance_km")
+        if dist is not None:
+            distance_score = min(dist / 5.0, 1.0)  # 0 = at home, 1 = 5km+
+        else:
+            distance_score = 0.5  # unknown → neutral
+
+        # Combined: 60% price value, 40% proximity
+        d["_score"] = 0.6 * price_score + 0.4 * distance_score
         scored.append(d)
 
     scored.sort(key=lambda x: x["_score"])
@@ -215,6 +223,7 @@ def build_email_html(top: list[dict], stats: dict, avg: float | None) -> str:
           <div style="font-size:22px;font-weight:bold;color:#1e3a5f">{price_fmt}</div>
           <div style="color:#374151;margin:4px 0">{rooms} חדרים | {sqm} מ"ר | {ppsqm}</div>
           <div style="color:#6b7280">{street}</div>
+          <div style="color:#6b7280;font-size:12px">{'📍 ' + str(listing['distance_km']) + ' ק"מ מהבית' if listing.get('distance_km') else ''}</div>
           {price_drop}
           <a href="{url}" style="display:inline-block;margin-top:10px;background:#2563eb;color:#fff;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:14px">צפה במודעה →</a>
         </div>"""
@@ -236,7 +245,7 @@ def build_email_html(top: list[dict], stats: dict, avg: float | None) -> str:
       <h2 style="color:#1e3a5f;margin-bottom:12px">Top 3 המלצות</h2>
       {cards_html if cards_html else '<p style="color:#6b7280">אין דירות חדשות היום.</p>'}
       <div style="text-align:center;margin-top:20px">
-        <a href="http://localhost:5173" style="color:#2563eb;font-size:13px">פתח את הדשבורד המלא →</a>
+        <a href="https://apt-hunt-hod-hasharon.netlify.app" style="color:#2563eb;font-size:13px">פתח את הדשבורד המלא →</a>
       </div>
     </div>"""
 
