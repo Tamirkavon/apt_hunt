@@ -1,75 +1,76 @@
 """
-Yad2 scraper — uses Playwright to intercept the internal map API.
+Yad2 scraper — Playwright with real Chrome (channel='chrome').
 
-The page loads listings via:
-  gw.yad2.co.il/realestate-feed/forsale/map?city=9700&area=54&...
-which returns data.markers[] with full listing info.
+Uses the system Chrome installation (not bundled Chromium) with headless=False
+to avoid Imperva/bot-detection that blocks headless/httpx approaches.
 
-We filter client-side for city = הוד השרון.
+Data is in __NEXT_DATA__ SSR JSON:
+  props.pageProps.feed.private  (private sellers)
+  props.pageProps.feed.agency   (agencies/brokers)
+
+Pagination: &page=N  (up to feed.pagination.totalPages)
 """
 import asyncio
+import json
 import math
-from playwright.async_api import async_playwright, Response
+import re
+from pathlib import Path
 
-# Home address: יצחק בן צבי 4, הוד השרון (מתחם 200)
+from playwright.async_api import async_playwright
+
+# Persist Chrome session between scrape runs to avoid bot re-detection
+_USER_DATA_DIR = str(Path(__file__).parent.parent.parent / "data" / "chrome_profile")
+
+# Home address: Yitzhak Ben Zvi 4, Hod HaSharon
 HOME_LAT = 32.1389
 HOME_LON = 34.8913
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Return distance in km between two lat/lon points."""
-    R = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    return R * 2 * math.asin(math.sqrt(a))
 
 MIN_PRICE = 2_000_000
 MAX_PRICE = 3_500_000
 MIN_ROOMS = 4
 MAX_ROOMS = 5
 
-SEARCH_URL = (
-    "https://www.yad2.co.il/realestate/forsale"
-    f"?city=9700&minRooms={MIN_ROOMS}&maxRooms={MAX_ROOMS}&price={MIN_PRICE}-{MAX_PRICE}&propertyGroup=apartments&dealType=1"
+BASE_URL = (
+    "https://www.yad2.co.il/realestate/forsale/center-and-sharon"
+    f"?area=54&city=9700&minRooms={MIN_ROOMS}&maxRooms={MAX_ROOMS}"
+    f"&propertyGroup=apartments&dealType=1&minPrice={MIN_PRICE}&maxPrice={MAX_PRICE}"
 )
 
-TARGET_CITIES = {"הוד השרון"}  # filter to only our city
+TARGET_CITIES = {"הוד השרון"}
 
 
-def _parse_marker(marker: dict) -> dict | None:
-    token = marker.get("token") or str(marker.get("orderId", ""))
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+def _parse_item(item: dict, is_agency: int) -> dict | None:
+    token = item.get("token") or str(item.get("orderId", ""))
     if not token:
         return None
 
-    addr = marker.get("address", {})
+    addr = item.get("address", {})
     city_text = addr.get("city", {}).get("text", "")
 
-    # Filter: only Hod HaSharon
     if city_text and city_text not in TARGET_CITIES:
         return None
 
-    # Filter: price range
-    price = marker.get("price")
+    price = item.get("price")
     if price and (price < MIN_PRICE or price > MAX_PRICE):
         return None
 
-    # Filter: rooms (4–5 only)
-    rooms_raw_check = details.get("roomsCount")
-    try:
-        rooms_check = float(rooms_raw_check) if rooms_raw_check is not None else None
-        if rooms_check is not None and (rooms_check < MIN_ROOMS or rooms_check > MAX_ROOMS):
-            return None
-    except (ValueError, TypeError):
-        pass
-
-    details = marker.get("additionalDetails", {})
-    meta = marker.get("metaData", {})
+    details = item.get("additionalDetails", {})
+    meta = item.get("metaData", {})
     house = addr.get("house", {})
 
     rooms_raw = details.get("roomsCount")
     try:
         rooms = float(rooms_raw) if rooms_raw is not None else None
+        if rooms is not None and (rooms < MIN_ROOMS or rooms > MAX_ROOMS):
+            return None
     except (ValueError, TypeError):
         rooms = None
 
@@ -82,33 +83,38 @@ def _parse_marker(marker: dict) -> dict | None:
     images = meta.get("images", [])
     image_url = meta.get("coverImage") or (images[0] if images else None)
 
-    # Extract coordinates for distance calculation
-    coords = marker.get("coordinates") or marker.get("coordinate") or {}
-    lat = coords.get("latitude") or coords.get("lat")
-    lon = coords.get("longitude") or coords.get("lng") or coords.get("lon")
+    # Coordinates: address.coords is the correct field in Yad2 SSR data
+    lat = None
+    lon = None
+    addr_coords = addr.get("coords") or {}
+    if isinstance(addr_coords, dict):
+        lat = addr_coords.get("lat")
+        lon = addr_coords.get("lon") or addr_coords.get("lng")
+
+    if not lat or not lon:
+        coords = item.get("coordinates") or item.get("coordinate") or {}
+        if isinstance(coords, dict):
+            lat = coords.get("lat") or coords.get("latitude")
+            lon = coords.get("lon") or coords.get("lng") or coords.get("longitude")
+
+    try:
+        lat = float(lat) if lat is not None else None
+        lon = float(lon) if lon is not None else None
+    except (ValueError, TypeError):
+        lat = lon = None
+
     distance_km = None
     if lat and lon:
         try:
-            distance_km = round(_haversine_km(HOME_LAT, HOME_LON, float(lat), float(lon)), 2)
-        except (ValueError, TypeError):
+            distance_km = round(_haversine_km(HOME_LAT, HOME_LON, lat, lon), 2)
+        except Exception:
             pass
-
-    # Detect agency/broker listing
-    listing_type = marker.get("listingType") or marker.get("ListingType") or ""
-    merchant = marker.get("merchant") or marker.get("merchantType") or marker.get("merchantId")
-    agency_fields = marker.get("agentData") or marker.get("agency")
-    is_agency = 1 if (
-        str(listing_type).lower() in ("agent", "agency", "2") or
-        bool(agency_fields) or
-        (isinstance(merchant, int) and merchant == 2) or
-        (isinstance(merchant, str) and merchant not in ("", "1", "private"))
-    ) else 0
 
     return {
         "external_id": str(token),
         "source": "yad2",
         "dedup_key": f"yad2:{token}",
-        "price": marker.get("price"),
+        "price": price,
         "rooms": rooms,
         "floor": house.get("floor"),
         "total_floors": None,
@@ -124,77 +130,131 @@ def _parse_marker(marker: dict) -> dict | None:
         "contact_name": None,
         "contact_phone": None,
         "listed_at": None,
-        "lat": float(lat) if lat else None,
-        "lon": float(lon) if lon else None,
+        "lat": lat,
+        "lon": lon,
         "distance_km": distance_km,
         "is_agency": is_agency,
     }
+
+
+def _parse_feed(feed: dict) -> list[dict]:
+    results = []
+    for section, is_agency in [("private", 0), ("agency", 1), ("yad1", 1), ("platinum", 1)]:
+        items = feed.get(section) or []
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                parsed = _parse_item(item, is_agency)
+                if parsed:
+                    results.append(parsed)
+    return results
 
 
 async def scrape_yad2() -> list[dict]:
     all_listings: list[dict] = []
     seen_keys: set[str] = set()
 
-    async def on_response(response: Response):
-        url = response.url
-        if "realestate-feed/forsale/map" not in url:
-            return
-        try:
-            ct = response.headers.get("content-type", "")
-            if "json" not in ct:
-                return
-            body = await response.json()
-            if not isinstance(body, dict):
-                return
-
-            markers = body.get("data", {}).get("markers", [])
-            if not isinstance(markers, list):
-                return
-
-            for marker in markers:
-                parsed = _parse_marker(marker)
-                if parsed and parsed["dedup_key"] not in seen_keys:
-                    seen_keys.add(parsed["dedup_key"])
-                    all_listings.append(parsed)
-
-            print(f"[Yad2] Map response: {len(markers)} markers, {len(all_listings)} Hod HaSharon so far")
-        except Exception as e:
-            print(f"[Yad2] Response parse error: {e}")
-
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"],
-        )
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1280, "height": 900},
-            locale="he-IL",
-        )
-        page = await context.new_page()
-        page.on("response", on_response)
-
-        print(f"[Yad2] Navigating...")
+        # Use persistent context with real Chrome to preserve cookies/session
+        # This avoids bot re-detection on repeated runs
         try:
-            await page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
+            Path(_USER_DATA_DIR).mkdir(parents=True, exist_ok=True)
+            context = await p.chromium.launch_persistent_context(
+                _USER_DATA_DIR,
+                channel="chrome",
+                headless=False,
+                args=["--window-position=9999,9999"],
+                viewport={"width": 1280, "height": 900},
+                locale="he-IL",
+            )
+            print("[Yad2] Using persistent Chrome profile")
         except Exception as e:
-            print(f"[Yad2] Navigation note: {e}")
+            print(f"[Yad2] Chrome not available ({e}), falling back to Chromium")
+            context = await p.chromium.launch_persistent_context(
+                _USER_DATA_DIR,
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox"],
+                viewport={"width": 1280, "height": 900},
+                locale="he-IL",
+            )
 
-        # Wait for XHR calls
-        await asyncio.sleep(10)
+        page = await context.new_page()
 
-        # Scroll to trigger more map tiles if needed
-        for _ in range(3):
-            await page.keyboard.press("End")
-            await asyncio.sleep(2)
+        # Page 1
+        url_p1 = BASE_URL + "&page=1"
+        print(f"[Yad2] Fetching page 1...")
+        try:
+            await page.goto(url_p1, wait_until="domcontentloaded", timeout=30000)
+        except Exception as e:
+            print(f"[Yad2] Navigation error page 1: {e}")
+            await context.close()
+            return []
 
-        await browser.close()
+        await asyncio.sleep(3)
 
-    print(f"[Yad2] Total Hod HaSharon listings: {len(all_listings)}")
+        feed_p1 = await page.evaluate("""() => {
+            const el = document.getElementById('__NEXT_DATA__');
+            if (!el) return null;
+            try {
+                const d = JSON.parse(el.textContent);
+                return d?.props?.pageProps?.feed || null;
+            } catch(e) { return null; }
+        }""")
+
+        if not feed_p1:
+            print("[Yad2] No feed in __NEXT_DATA__ on page 1")
+            await context.close()
+            return []
+
+        pagination = feed_p1.get("pagination", {})
+        total_pages = pagination.get("totalPages", 1)
+        print(f"[Yad2] {pagination.get('total','?')} listings, {total_pages} pages")
+
+        items_p1 = _parse_feed(feed_p1)
+        for item in items_p1:
+            if item["dedup_key"] not in seen_keys:
+                seen_keys.add(item["dedup_key"])
+                all_listings.append(item)
+        print(f"[Yad2] Page 1: {len(items_p1)} parsed -> {len(all_listings)} Hod HaSharon")
+
+        # Remaining pages
+        for page_num in range(2, total_pages + 1):
+            url = BASE_URL + f"&page={page_num}"
+            print(f"[Yad2] Fetching page {page_num}/{total_pages}...")
+            try:
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                await asyncio.sleep(2)
+
+                feed_data = await page.evaluate("""() => {
+                    const el = document.getElementById('__NEXT_DATA__');
+                    if (!el) return null;
+                    try {
+                        const d = JSON.parse(el.textContent);
+                        return d?.props?.pageProps?.feed || null;
+                    } catch(e) { return null; }
+                }""")
+
+                if not feed_data:
+                    print(f"[Yad2] No feed on page {page_num}")
+                    continue
+
+                items = _parse_feed(feed_data)
+                new_count = 0
+                for item in items:
+                    if item["dedup_key"] not in seen_keys:
+                        seen_keys.add(item["dedup_key"])
+                        all_listings.append(item)
+                        new_count += 1
+                print(f"[Yad2] Page {page_num}: {len(items)} ({new_count} new) -> {len(all_listings)} total")
+
+            except Exception as e:
+                print(f"[Yad2] Error page {page_num}: {e}")
+                continue
+
+        await context.close()
+
+    print(f"[Yad2] Done. {len(all_listings)} listings")
     return all_listings
 
 

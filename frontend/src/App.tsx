@@ -14,34 +14,30 @@ const DEFAULT_FILTERS: Filters = {
   max_price: 3_500_000,
   min_rooms: 0,
   include_agency: true,
+  max_distance_km: 1.0,
 };
 
 export default function App() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const { data: stats } = useStats();
   const { data: rawListings = [], isLoading, error } = useListings(filters);
-  const listings = filters.include_agency
-    ? rawListings
-    : rawListings.filter((l) => l.is_agency !== 1);
+  const listings = rawListings
+    .filter((l) => filters.include_agency || l.is_agency !== 1)
+    .filter((l) =>
+      filters.max_distance_km === null ||
+      l.distance_km === null ||
+      l.distance_km <= filters.max_distance_km
+    );
 
   const updateFilters = (partial: Partial<Filters>) => {
     setFilters((prev) => ({ ...prev, ...partial }));
   };
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-50 font-sans">
-      {/* Header */}
-      <header className="bg-[#1e3a5f] text-white text-center py-3">
-        <h1 className="text-lg font-bold tracking-wide">🏠 סוכן דירות — הוד השרון</h1>
-      </header>
-
+    <div dir="rtl" className="min-h-screen bg-stone-50 font-sans">
       <StatsBar stats={stats} />
       <FilterBar filters={filters} onChange={updateFilters} total={listings.length} />
-      <ListingGrid
-        listings={listings}
-        isLoading={isLoading}
-        error={error as Error | null}
-      />
+      <ListingGrid listings={listings} isLoading={isLoading} error={error as Error | null} />
     </div>
   );
 }

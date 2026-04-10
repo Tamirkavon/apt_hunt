@@ -57,4 +57,5 @@ export interface Filters {
   max_price: number;
   min_rooms: number;
   include_agency: boolean;
+  max_distance_km: number | null;
 }

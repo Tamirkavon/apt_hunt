@@ -6,16 +6,84 @@ Usage:
     python -m scrapers.runner
 """
 import asyncio
+import math
 import sys
+import time
 from pathlib import Path
 
 # Allow running from backend/ directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import httpx
 from database import get_connection, init_db, upsert_listings, mark_stale, log_scrape_run, get_stats, save_neighborhood_stats
 from scrapers.yad2 import scrape_yad2  # now async
 from scrapers.madlan import scrape_madlan
 from scrapers.nadlan import fetch_nadlan_avg, needs_refresh
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return round(R * 2 * math.asin(math.sqrt(a)), 2)
+
+
+def geocode_missing(conn, home_lat: float, home_lon: float, max_items: int = 50):
+    """
+    For listings with a street address but no distance_km, geocode via Nominatim
+    and calculate distance from home. Rate-limited to 1 req/sec per OSM policy.
+    """
+    rows = conn.execute(
+        """SELECT id, street, street_number, city
+           FROM listings
+           WHERE distance_km IS NULL
+             AND street IS NOT NULL AND street != ''
+           LIMIT ?""",
+        (max_items,),
+    ).fetchall()
+
+    if not rows:
+        return
+
+    print(f"[Geocode] Geocoding {len(rows)} listings without distance...")
+    headers = {"User-Agent": "apt_hunt/1.0 (apartment search tool)"}
+    geocoded = 0
+
+    for row in rows:
+        parts = []
+        if row["street"]:
+            parts.append(row["street"])
+        if row["street_number"]:
+            parts.append(str(row["street_number"]))
+        if row["city"]:
+            parts.append(row["city"])
+        address = ", ".join(parts) + ", ישראל"
+
+        try:
+            resp = httpx.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": address, "format": "json", "limit": 1, "countrycodes": "il"},
+                headers=headers,
+                timeout=10,
+            )
+            results = resp.json()
+            if results:
+                lat = float(results[0]["lat"])
+                lon = float(results[0]["lon"])
+                dist = _haversine_km(home_lat, home_lon, lat, lon)
+                with conn:
+                    conn.execute(
+                        "UPDATE listings SET lat=?, lon=?, distance_km=? WHERE id=?",
+                        (lat, lon, dist, row["id"]),
+                    )
+                geocoded += 1
+        except Exception as e:
+            print(f"[Geocode] Error geocoding '{address}': {e}")
+
+        time.sleep(1.1)  # Nominatim rate limit: max 1 req/sec
+
+    print(f"[Geocode] Done. Geocoded {geocoded}/{len(rows)} listings.")
 
 
 async def run_all(send_email: bool = True) -> dict:
@@ -68,6 +136,16 @@ async def run_all(send_email: bool = True) -> dict:
                 print(f"[Nadlan] Saved avg ₪{avg:,}/m² from {count} deals")
     except Exception as e:
         print(f"[Nadlan] Error: {e}")
+
+    # --- Geocode listings without distance (address → lat/lon → km) ---
+    try:
+        from database import get_setting
+        home_lat = float(get_setting(conn, "home_lat") or "32.1389")
+        home_lon = float(get_setting(conn, "home_lon") or "34.8913")
+        print("\n=== Geocoding listings without distance ===")
+        geocode_missing(conn, home_lat, home_lon)
+    except Exception as e:
+        print(f"[Geocode] Error: {e}")
 
     conn.close()
     print("\n=== Scrape complete ===")

@@ -139,6 +139,18 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> tuple[bool, bool]
     if existing:
         old_price = existing["price"]
         new_price = listing.get("price")
+
+        # Always update lat/lon/distance_km if we now have them
+        new_lat = listing.get("lat")
+        new_lon = listing.get("lon")
+        new_dist = listing.get("distance_km")
+        if new_lat is not None or new_lon is not None or new_dist is not None:
+            conn.execute(
+                """UPDATE listings SET lat=COALESCE(?,lat), lon=COALESCE(?,lon),
+                   distance_km=COALESCE(?,distance_km) WHERE id=?""",
+                (new_lat, new_lon, new_dist, existing["id"]),
+            )
+
         if new_price and old_price and new_price != old_price:
             drop = old_price - new_price  # positive = drop, negative = increase
             conn.execute(

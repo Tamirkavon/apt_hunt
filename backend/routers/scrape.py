@@ -2,7 +2,8 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
+from database import get_connection, get_setting
 
 router = APIRouter(prefix="/api")
 
@@ -39,5 +40,28 @@ def trigger_scrape():
 @router.get("/scrape/running")
 def scrape_status():
     return {"running": _scrape_running}
+
+
+def _run_geocode():
+    """Geocode listings with addresses but no distance_km."""
+    try:
+        import sys
+        sys.path.insert(0, str(BACKEND_DIR))
+        from scrapers.runner import geocode_missing
+        conn = get_connection()
+        home_lat = float(get_setting(conn, "home_lat") or "32.1389")
+        home_lon = float(get_setting(conn, "home_lon") or "34.8913")
+        geocode_missing(conn, home_lat, home_lon)
+        conn.close()
+    except Exception as e:
+        print(f"[Geocode] Error: {e}")
+
+
+@router.post("/listings/geocode")
+def trigger_geocode():
+    """Geocode listings that have a street address but no distance_km."""
+    thread = threading.Thread(target=_run_geocode, daemon=True)
+    thread.start()
+    return {"status": "started"}
 
 

@@ -9,8 +9,9 @@
     },
     {
       "name": "Backend (FastAPI)",
-      "runtimeExecutable": "C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
-      "runtimeArgs": ["backend/start_server.py"],
+      "runtimeExecutable": "C:\\Users\\USER\\Desktop\\Claude Code\\apt_hunt\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
+      "cwd": "C:\\Users\\USER\\Desktop\\Claude Code\\apt_hunt\\backend",
       "port": 8000
     }
   ]

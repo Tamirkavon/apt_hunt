@@ -17,15 +17,15 @@ function Seg({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex rounded-lg overflow-hidden border border-gray-200 text-sm">
+    <div className="flex rounded-lg overflow-hidden border border-stone-200 text-xs">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-3 py-1.5 transition-colors ${
+          className={`px-3 py-1.5 transition-colors font-medium ${
             value === o.value
-              ? "bg-[#1e3a5f] text-white"
-              : "bg-white text-gray-600 hover:bg-gray-50"
+              ? "bg-stone-900 text-white"
+              : "bg-white text-stone-500 hover:bg-stone-50 hover:text-stone-700"
           }`}
         >
           {o.label}
@@ -49,10 +49,21 @@ export function FilterBar({ filters, onChange, total }: Props) {
   };
 
   return (
-    <div className="bg-white border-b border-gray-200 px-6 py-3 space-y-3">
-      {/* Row 1: source + show + sort */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex flex-wrap gap-3 items-center">
+    <div className="bg-white border-b border-stone-200 px-3 sm:px-6 py-2.5 space-y-2.5">
+      {/* Row 1 */}
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        <div className="flex flex-wrap gap-2 items-center">
+          <Seg
+            options={[
+              { label: "הכל", value: "all" },
+              { label: "חדשות", value: "new" },
+              { label: "לא נראו", value: "unseen" },
+              { label: "★", value: "favorites" },
+            ]}
+            value={filters.show}
+            onChange={(v) => onChange({ show: v as Filters["show"] })}
+          />
+
           <Seg
             options={[
               { label: "הכל", value: "" },
@@ -63,19 +74,8 @@ export function FilterBar({ filters, onChange, total }: Props) {
             onChange={(v) => onChange({ source: v as Filters["source"] })}
           />
 
-          <Seg
-            options={[
-              { label: "כל הדירות", value: "all" },
-              { label: "חדשות היום", value: "new" },
-              { label: "לא נראו", value: "unseen" },
-              { label: "מועדפים ★", value: "favorites" },
-            ]}
-            value={filters.show}
-            onChange={(v) => onChange({ show: v as Filters["show"] })}
-          />
-
           <select
-            className="border border-gray-200 rounded-lg text-sm px-3 py-1.5 bg-white text-gray-700"
+            className="border border-stone-200 rounded-lg text-xs px-2.5 py-1.5 bg-white text-stone-700 font-medium focus:outline-none focus:ring-1 focus:ring-amber-400"
             value={`${filters.sort_by}:${filters.order}`}
             onChange={(e) => {
               const [sort_by, order] = e.target.value.split(":");
@@ -90,24 +90,34 @@ export function FilterBar({ filters, onChange, total }: Props) {
             <option value="rating:desc">דירוג שלי</option>
             <option value="distance_km:asc">קרוב לביתי</option>
           </select>
+
+          <button
+            onClick={() => onChange({ include_agency: !filters.include_agency })}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors font-medium ${
+              filters.include_agency
+                ? "bg-stone-900 text-white border-stone-900"
+                : "bg-white text-stone-400 border-stone-200 hover:border-stone-400"
+            }`}
+          >
+            🤝 תיווך
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-400">{total} תוצאות</span>
+          <span className="text-xs text-stone-400">{total} תוצאות</span>
           <button
             onClick={handleMarkAll}
-            className="text-sm text-gray-400 hover:text-gray-600 underline transition-colors"
+            className="text-xs text-stone-400 hover:text-stone-700 transition-colors"
           >
             סמן הכל כנראה
           </button>
         </div>
       </div>
 
-      {/* Row 2: price range + rooms */}
+      {/* Row 2: price + rooms */}
       <div className="flex flex-wrap gap-4 items-center">
-        {/* Price range */}
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span className="font-medium">מחיר:</span>
+        <div className="flex items-center gap-2 text-xs text-stone-600">
+          <span className="font-medium text-stone-700">מחיר:</span>
           <input
             type="number"
             step={100000}
@@ -115,9 +125,9 @@ export function FilterBar({ filters, onChange, total }: Props) {
             max={filters.max_price}
             value={filters.min_price}
             onChange={(e) => onChange({ min_price: Number(e.target.value) })}
-            className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center"
+            className="w-28 border border-stone-200 rounded-lg px-2 py-1 text-xs text-center bg-stone-50 focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
-          <span className="text-gray-400">—</span>
+          <span className="text-stone-300">—</span>
           <input
             type="number"
             step={100000}
@@ -125,16 +135,15 @@ export function FilterBar({ filters, onChange, total }: Props) {
             max={5_000_000}
             value={filters.max_price}
             onChange={(e) => onChange({ max_price: Number(e.target.value) })}
-            className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center"
+            className="w-28 border border-stone-200 rounded-lg px-2 py-1 text-xs text-center bg-stone-50 focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
-          <span className="text-gray-400 text-xs">
+          <span className="text-stone-400 text-[11px] font-light">
             {fmtM(filters.min_price)} – {fmtM(filters.max_price)}
           </span>
         </div>
 
-        {/* Rooms filter */}
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span className="font-medium">חדרים מינימום:</span>
+        <div className="flex items-center gap-2 text-xs text-stone-600">
+          <span className="font-medium text-stone-700">חדרים מינ׳:</span>
           <Seg
             options={[
               { label: "הכל", value: "0" },
@@ -147,18 +156,20 @@ export function FilterBar({ filters, onChange, total }: Props) {
           />
         </div>
 
-        {/* Agency toggle */}
-        <button
-          onClick={() => onChange({ include_agency: !filters.include_agency })}
-          className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-            filters.include_agency
-              ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-              : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
-          }`}
-        >
-          <span>🤝</span>
-          <span>כולל מודעות עם תיווך</span>
-        </button>
+        <div className="flex items-center gap-2 text-xs text-stone-600">
+          <span className="font-medium text-stone-700">מרחק מקס׳:</span>
+          <Seg
+            options={[
+              { label: "הכל", value: "null" },
+              { label: "1 ק״מ", value: "1" },
+              { label: "2 ק״מ", value: "2" },
+              { label: "3 ק״מ", value: "3" },
+              { label: "5 ק״מ", value: "5" },
+            ]}
+            value={filters.max_distance_km === null ? "null" : String(filters.max_distance_km)}
+            onChange={(v) => onChange({ max_distance_km: v === "null" ? null : Number(v) })}
+          />
+        </div>
       </div>
     </div>
   );

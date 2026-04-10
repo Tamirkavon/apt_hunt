@@ -20,7 +20,7 @@ echo.
 echo === Starting ngrok tunnel ===
 echo === Public URL: https://unpesterous-mikel-individualistically.ngrok-free.dev ===
 echo.
-start "ngrok" cmd /k "\"C:\Users\USER\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe\" http 8000 --url=unpesterous-mikel-individualistically.ngrok-free.dev"
+start "ngrok" cmd /k "ngrok http 8000 --url=unpesterous-mikel-individualistically.ngrok-free.dev"
 
 echo.
 echo Both services started!

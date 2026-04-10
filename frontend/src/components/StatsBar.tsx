@@ -1,4 +1,4 @@
-import { RefreshCw, Star, Home, TrendingDown, MapPin, Pencil, Check, X } from "lucide-react";
+import { RefreshCw, MapPin, Pencil, Check, X, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import type { Stats } from "../types/listing";
 import { useScrape, useScrapeStatus, useHomeAddress, useUpdateHomeAddress } from "../hooks/useListings";
@@ -13,7 +13,7 @@ function fmtPrice(n: number) {
 }
 
 function fmtDate(iso: string | null) {
-  if (!iso) return "מעולם לא";
+  if (!iso) return "—";
   try {
     const d = new Date(iso);
     return d.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -27,44 +27,53 @@ function HomeAddressBar() {
   const updateHome = useUpdateHomeAddress();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const startEdit = () => {
     setDraft(home?.address ?? "");
+    setError(null);
     setEditing(true);
   };
 
   const save = () => {
-    if (draft.trim()) {
-      updateHome.mutate(draft.trim());
-    }
-    setEditing(false);
+    if (!draft.trim()) return;
+    setError(null);
+    updateHome.mutate(draft.trim(), {
+      onSuccess: () => setEditing(false),
+      onError: () => setError("לא נמצאה כתובת — נסה שנית"),
+    });
   };
 
-  const cancel = () => setEditing(false);
+  const cancel = () => { setEditing(false); setError(null); };
 
   return (
-    <div className="flex items-center gap-2 text-xs opacity-80 mt-1">
-      <MapPin size={11} className="shrink-0" />
+    <div className="flex items-center gap-2 flex-wrap">
+      <MapPin size={12} className="shrink-0 text-amber-500" />
       {editing ? (
         <>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
-            className="bg-white/20 border border-white/40 rounded px-2 py-0.5 text-white text-xs w-64 focus:outline-none"
+            className="bg-white border border-stone-300 rounded-md px-2 py-1 text-stone-800 text-sm w-60 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400"
             autoFocus
             placeholder="הזן כתובת..."
           />
-          <button onClick={save} disabled={updateHome.isPending} className="hover:opacity-100 opacity-70">
-            {updateHome.isPending ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
+          <button onClick={save} disabled={updateHome.isPending} className="text-stone-500 hover:text-stone-800 transition-colors">
+            {updateHome.isPending ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
           </button>
-          <button onClick={cancel} className="hover:opacity-100 opacity-70"><X size={11} /></button>
+          <button onClick={cancel} className="text-stone-400 hover:text-stone-600 transition-colors"><X size={13} /></button>
+          {error && (
+            <span className="flex items-center gap-1 text-red-500 text-xs">
+              <AlertCircle size={11} /> {error}
+            </span>
+          )}
         </>
       ) : (
         <>
-          <span className="font-medium">{home?.address ?? "..."}</span>
-          <button onClick={startEdit} className="hover:opacity-100 opacity-50" title="שנה כתובת בית">
-            <Pencil size={10} />
+          <span className="text-stone-600 text-sm">{home?.address ?? "..."}</span>
+          <button onClick={startEdit} className="text-stone-400 hover:text-amber-500 transition-colors" title="שנה כתובת בית">
+            <Pencil size={11} />
           </button>
         </>
       )}
@@ -78,58 +87,64 @@ export function StatsBar({ stats }: Props) {
   const isRunning = status?.running || scrape.isPending;
 
   return (
-    <div className="bg-[#1e3a5f] text-white px-6 py-3">
-      {/* Top row */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 justify-between">
-        <div className="flex items-center gap-x-6 flex-wrap gap-y-1">
-          <div className="flex items-center gap-2">
-            <Home size={14} className="opacity-60" />
-            <span className="text-xs opacity-60">פעילות:</span>
-            <span className="font-bold">{stats?.total_active ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full" />
-            <span className="text-xs opacity-60">חדשות היום:</span>
-            <span className="font-bold text-green-300">{stats?.new_today ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Star size={12} className="text-yellow-300" />
-            <span className="text-xs opacity-60">מועדפים:</span>
-            <span className="font-bold">{stats?.favorites_count ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <TrendingDown size={12} className="text-emerald-300" />
-            <span className="text-xs opacity-60">ירידות היום:</span>
-            <span className="font-bold text-emerald-300">{stats?.price_drops_today ?? 0}</span>
-          </div>
+    <div className="bg-white border-b border-stone-200 px-3 sm:px-6 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+
+        {/* Title + count */}
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-stone-800">סוכן דירות</h1>
+          <span className="text-stone-400 text-sm font-light">
+            {stats?.total_active ?? "—"} דירות
+          </span>
         </div>
 
-        <button
-          onClick={() => scrape.mutate()}
-          disabled={isRunning}
-          className="flex items-center gap-2 bg-white/15 hover:bg-white/25 disabled:opacity-50
-                     text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors"
-        >
-          <RefreshCw size={13} className={isRunning ? "animate-spin" : ""} />
-          {isRunning ? "סורק..." : "עדכן עכשיו"}
-        </button>
+        {/* Stats pills */}
+        <div className="flex items-center gap-3 flex-wrap text-sm">
+          {(stats?.new_today ?? 0) > 0 && (
+            <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              {stats!.new_today} חדשות היום
+            </span>
+          )}
+
+          <span className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-medium">
+            ★ {stats?.favorites_count ?? 0} מועדפות
+          </span>
+
+          {(stats?.price_drops_today ?? 0) > 0 && (
+            <span className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-medium">
+              ↓ {stats!.price_drops_today} ירידות מחיר
+            </span>
+          )}
+
+          {stats?.avg_price ? (
+            <span className="text-stone-500 text-sm">
+              ממוצע: <strong className="text-stone-700">{fmtPrice(stats.avg_price)}</strong>
+            </span>
+          ) : null}
+        </div>
+
+        {/* Right: scrape button + last update */}
+        <div className="flex items-center gap-3">
+          <span className="text-stone-400 text-xs hidden sm:block">
+            עדכון {fmtDate(stats?.last_scrape_at ?? null)}
+          </span>
+          <button
+            onClick={() => scrape.mutate()}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 text-sm font-medium text-white bg-stone-800 hover:bg-stone-700
+                       px-4 py-2 rounded-lg transition-all disabled:opacity-40 shadow-sm"
+          >
+            <RefreshCw size={13} className={isRunning ? "animate-spin" : ""} />
+            {isRunning ? "סורק..." : "עדכן"}
+          </button>
+        </div>
       </div>
 
       {/* Home address row */}
-      <HomeAddressBar />
-
-      {/* Bottom row: price stats */}
-      {(stats?.avg_price || stats?.min_price || stats?.max_price) ? (
-        <div className="flex flex-wrap gap-x-6 gap-y-0.5 mt-1.5 text-xs opacity-70">
-          <span>ממוצע: <span className="opacity-100 font-medium">{fmtPrice(stats!.avg_price)}</span></span>
-          <span>מינימום: <span className="opacity-100">{fmtPrice(stats!.min_price)}</span></span>
-          <span>מקסימום: <span className="opacity-100">{fmtPrice(stats!.max_price)}</span></span>
-          <span>עדכון אחרון: {fmtDate(stats?.last_scrape_at ?? null)}</span>
-          <span>Yad2: {stats?.yad2_count ?? 0} | Madlan: {stats?.madlan_count ?? 0}</span>
-        </div>
-      ) : (
-        <div className="text-xs opacity-50 mt-1">עדכון אחרון: {fmtDate(stats?.last_scrape_at ?? null)}</div>
-      )}
+      <div className="mt-3 pt-3 border-t border-stone-100">
+        <HomeAddressBar />
+      </div>
     </div>
   );
 }

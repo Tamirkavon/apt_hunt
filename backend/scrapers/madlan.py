@@ -8,8 +8,21 @@ Strategy:
 """
 import asyncio
 import json
+import math
 import re
 from playwright.async_api import async_playwright, Response
+
+HOME_LAT = 32.1389
+HOME_LON = 34.8913
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
 
 TARGET_URL = (
     "https://www.madlan.co.il/for-sale/%D7%94%D7%95%D7%93-%D7%94%D7%A9%D7%A8%D7%95%D7%9F"
@@ -88,6 +101,25 @@ def _parse_madlan_item(item: dict) -> dict | None:
     url_slug = item.get("slug") or listing_id
     url = f"https://www.madlan.co.il/listing/{url_slug}"
 
+    # Coordinates
+    coords = item.get("coordinates") or item.get("coordinate") or item.get("location") or {}
+    lat = None
+    lon = None
+    if isinstance(coords, dict):
+        lat_raw = coords.get("lat") or coords.get("latitude")
+        lon_raw = coords.get("lon") or coords.get("longitude") or coords.get("lng")
+        try:
+            lat = float(lat_raw) if lat_raw is not None else None
+            lon = float(lon_raw) if lon_raw is not None else None
+        except (ValueError, TypeError):
+            lat = lon = None
+    distance_km = None
+    if lat and lon:
+        try:
+            distance_km = round(_haversine_km(HOME_LAT, HOME_LON, lat, lon), 2)
+        except Exception:
+            pass
+
     return {
         "external_id": listing_id,
         "source": "madlan",
@@ -108,6 +140,9 @@ def _parse_madlan_item(item: dict) -> dict | None:
         "contact_name": contact_name,
         "contact_phone": contact_phone,
         "listed_at": str(listed_at) if listed_at else None,
+        "lat": lat,
+        "lon": lon,
+        "distance_km": distance_km,
     }
 
 
@@ -151,16 +186,13 @@ async def scrape_madlan() -> list[dict]:
     captured_json: list[any] = []
 
     async def on_response(response: Response):
-        url = response.url
-        # Intercept likely API calls
-        if any(kw in url for kw in ["api.madlan", "condominiums", "listings", "search", "graphql"]):
-            try:
-                ct = response.headers.get("content-type", "")
-                if "json" in ct:
-                    body = await response.json()
-                    captured_json.append(body)
-            except Exception:
-                pass
+        try:
+            ct = response.headers.get("content-type", "")
+            if "json" in ct:
+                body = await response.json()
+                captured_json.append(body)
+        except Exception:
+            pass
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(

@@ -61,10 +61,13 @@ def get_listings(
         sort_col = sort_by if sort_by in valid_sorts else "first_seen_at"
         sort_dir = "ASC" if order.lower() == "asc" else "DESC"
 
+        # NULLs always last regardless of sort direction
+        null_order = f"{sort_col} IS NULL ASC, {sort_col} {sort_dir}"
+
         sql = f"""
             SELECT * FROM listings
             WHERE {' AND '.join(where)}
-            ORDER BY {sort_col} {sort_dir}
+            ORDER BY {null_order}
             LIMIT ? OFFSET ?
         """
         params += [limit, offset]
