@@ -37,7 +37,7 @@ export default function App() {
     <div dir="rtl" className="min-h-screen bg-stone-50 font-sans">
       <StatsBar stats={stats} />
       <FilterBar filters={filters} onChange={updateFilters} total={listings.length} />
-      <ListingGrid listings={listings} isLoading={isLoading} error={error as Error | null} />
+      <ListingGrid listings={listings} isLoading={isLoading} error={error as Error | null} showMode={filters.show} />
     </div>
   );
 }
